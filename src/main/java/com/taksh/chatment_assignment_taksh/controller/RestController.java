@@ -6,39 +6,48 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.client.RestTemplate;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.Calendar;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @org.springframework.web.bind.annotation.RestController
 public class RestController {
 
     @Autowired
     LogRepository repository;
+    @Value("${service.url}")
+    private String api_url;
+
 
     @GetMapping("/fact")
     public String getFacts(HttpServletRequest request) throws JSONException {
         String animal=request.getParameter("animal");
         RestTemplate template=new RestTemplate();
-        String response=template.getForObject("http://api.svobodaweb.cz/animal-facts/random?animal="+animal,String.class);
+        String response=template.getForObject(api_url+animal,String.class);
         JSONObject object=new JSONObject(response);
+        Pattern p = Pattern.compile("\"([^\"]*)\"");
+        Matcher m = p.matcher(object.getString("data"));
+        String data="";
+        while (m.find()) {
+            data=m.group(1);
+        }
+        String finalData = data;
         Runnable runnable= () -> {
             Logs log=new Logs();
             log.setRequest_ip(request.getRemoteAddr());
             String time=Calendar.getInstance().getTime().toString();
             log.setDate_time(time);
-            try {
-                log.setSent_response(object.getString("data"));
-                repository.save(log);
-            } catch (JSONException e) {
-                throw new RuntimeException(e);
-            }
+            log.setSent_response(finalData);
+            repository.save(log);
         };
         runnable.run();
-        return object.getString("data");
+        return data;
     }
 
     @GetMapping("/logs")
